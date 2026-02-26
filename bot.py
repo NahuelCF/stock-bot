@@ -2,10 +2,11 @@ import requests
 import re
 import json
 import asyncio
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "TU_TOKEN"
+BOT_TOKEN = os.getenv("TOKEN")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
@@ -62,10 +63,14 @@ async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "notified": False
         }
 
-        await update.message.reply_text(f"Agregado ✅\n{url}\nTalles: {', '.join(sizes)}")
+        await update.message.reply_text(
+            f"Agregado ✅\n{url}\nTalles: {', '.join(sizes)}"
+        )
 
-    except:
-        await update.message.reply_text("Uso correcto:\n/add URL talle talle")
+    except Exception:
+        await update.message.reply_text(
+            "Uso correcto:\n/add URL talle talle"
+        )
 
 
 async def list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,7 +86,12 @@ async def list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Uso correcto:\n/remove URL")
+        return
+
     url = context.args[0]
+
     if url in products:
         del products[url]
         await update.message.reply_text("Eliminado ✅")
@@ -89,41 +99,53 @@ async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No encontrado.")
 
 
-async def monitor(app):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.application.bot_data.setdefault("chat_ids", set()).add(
+        update.effective_chat.id
+    )
+    await update.message.reply_text("Bot activo 👟")
+
+
+async def monitor(application):
     while True:
-        for url, data in products.items():
-            available = check_stock(url, data["product_id"], data["sizes"])
-
-            if available and not data["notified"]:
-                await app.bot.send_message(
-                    chat_id=list(app.bot_data["chat_ids"])[0],
-                    text=f"🔥 STOCK DISPONIBLE\n{url}\nTalles: {', '.join(data['sizes'])}"
+        if "chat_ids" in application.bot_data:
+            for url, data in products.items():
+                available = check_stock(
+                    url,
+                    data["product_id"],
+                    data["sizes"]
                 )
-                data["notified"] = True
 
-            if not available:
-                data["notified"] = False
+                if available and not data["notified"]:
+                    for chat_id in application.bot_data["chat_ids"]:
+                        await application.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"🔥 STOCK DISPONIBLE\n{url}\nTalles: {', '.join(data['sizes'])}"
+                        )
+                    data["notified"] = True
+
+                if not available:
+                    data["notified"] = False
 
         await asyncio.sleep(600)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.application.bot_data.setdefault("chat_ids", set()).add(update.effective_chat.id)
-    await update.message.reply_text("Bot activo 👟")
+async def post_init(application):
+    asyncio.create_task(monitor(application))
 
 
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+app = (
+    ApplicationBuilder()
+    .token(BOT_TOKEN)
+    .post_init(post_init)
+    .build()
+)
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("add", add))
-    app.add_handler(CommandHandler("list", list_products))
-    app.add_handler(CommandHandler("remove", remove))
-
-    asyncio.create_task(monitor(app))
-
-    await app.run_polling()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("add", add))
+app.add_handler(CommandHandler("list", list_products))
+app.add_handler(CommandHandler("remove", remove))
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app.run_polling()
