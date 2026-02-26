@@ -27,21 +27,39 @@ def check_stock(url, product_id, sizes):
     r = requests.get(url, headers=HEADERS)
     html = r.text
 
-    match = re.search(
-        rf'"jsonConfig":({{.*?"productId":"{product_id}".*?}})',
-        html
-    )
-
-    if not match:
+    start = html.find('"jsonConfig":')
+    if start == -1:
         return False
 
-    data = json.loads(match.group(1))
-    print(data["attributes"].keys())
-    options = data["attributes"]["272"]["options"]
+    start = html.find('{', start)
+    if start == -1:
+        return False
 
-    for option in options:
-        if option["label"] in sizes and option["products"]:
-            return True
+    brace_count = 0
+    end = start
+
+    for i in range(start, len(html)):
+        if html[i] == '{':
+            brace_count += 1
+        elif html[i] == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                end = i + 1
+                break
+
+    json_str = html[start:end]
+
+    try:
+        data = json.loads(json_str)
+    except:
+        return False
+
+    # Buscar dinámicamente el atributo talle
+    for attribute in data.get("attributes", {}).values():
+        options = attribute.get("options", [])
+        for option in options:
+            if option["label"] in sizes and option["products"]:
+                return True
 
     return False
 
@@ -150,4 +168,5 @@ app.add_handler(CommandHandler("remove", remove))
 
 if __name__ == "__main__":
     app.run_polling()
+
 
