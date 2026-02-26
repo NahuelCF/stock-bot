@@ -36,6 +36,7 @@ def check_stock(url, product_id, sizes):
         return False
 
     data = json.loads(match.group(1))
+    print(data["attributes"].keys())
     options = data["attributes"]["272"]["options"]
 
     for option in options:
@@ -127,7 +128,7 @@ async def monitor(application):
                 if not available:
                     data["notified"] = False
 
-        await asyncio.sleep(600)
+        await asyncio.sleep(30)
 
 
 async def post_init(application):
@@ -149,3 +150,4 @@ app.add_handler(CommandHandler("remove", remove))
 
 if __name__ == "__main__":
     app.run_polling()
+
