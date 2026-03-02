@@ -146,7 +146,7 @@ async def monitor(application):
                 if not available:
                     data["notified"] = False
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(600)
 
 
 async def post_init(application):
@@ -168,5 +168,6 @@ app.add_handler(CommandHandler("remove", remove))
 
 if __name__ == "__main__":
     app.run_polling()
+
 
 
